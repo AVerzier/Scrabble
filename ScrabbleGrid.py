@@ -213,7 +213,7 @@ class ScrabbleGrid(Grid):
         self.lang = lang
         # Dictionnary
         with open(f"Words/WORDS {self.lang}.txt", "r") as file:
-            self.WORDS = eval(file.read())
+            self.WORDS = file.readlines()
 
         # Points on each letter
         with open(f"Letters/letPt {self.lang}.txt", "r") as file:
