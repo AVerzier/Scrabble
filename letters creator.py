@@ -1,12 +1,11 @@
 #--CREER LES IMAGES DES LETTRES--#
 
-lang = "FR"
-
 from PIL import Image, ImageDraw, ImageFont
 
+lang = "FR"
+
 with open(f"Letters/letPt {lang}.txt", "r") as file:
-    file = fich.read()
-    pts = eval(fich)
+    pts = eval(file.read())
 
 letters = [(let, pts[let]) for let in pts]
 smallLetters = [let[0].lower() for let in letters]

@@ -213,7 +213,7 @@ class ScrabbleGrid(Grid):
         self.lang = lang
         # Dictionnary
         with open(f"Words/WORDS {self.lang}.txt", "r") as file:
-            self.WORDS = file.readlines()
+            self.WORDS = file.read().split("\n")
 
         # Points on each letter
         with open(f"Letters/letPt {self.lang}.txt", "r") as file:
@@ -409,6 +409,7 @@ class ScrabbleGrid(Grid):
             # raise ValueError(f"{wordToCount.upper()} not in the dictionnary")
 
         return True
+
 
 if __name__ == '__main__':
     g = Grid([[i * j for j in range(5)]for i in range(3)])
