@@ -1,7 +1,5 @@
-Images/
+Images/Letters
 __pycache__/
 *.pyc
-*.jpg
-*.png
 *.sublime-project
 *.sublime-workspace

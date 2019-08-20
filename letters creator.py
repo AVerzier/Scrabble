@@ -10,7 +10,7 @@ with open(f"Letters/letPt {lang}.txt", "r") as file:
 letters = [(let, pts[let]) for let in pts]
 smallLetters = [let[0].lower() for let in letters]
 
-fond = Image.open("Images/Letters/let background.png")
+fond = Image.open("Images/let background.png")
 fond.save(f"Images/Letters/{lang}/Blanks/blank.png")
 w, h = fond.size
 

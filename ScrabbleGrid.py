@@ -1,97 +1,4 @@
-
-class Grid:
-    """2D Rectangular Grid"""
-
-    def __init__(self, listOfLists):
-        if type(listOfLists) != list or any([type(row) != list for row in listOfLists]):
-            raise TypeError("Need a list of lists")
-        testLen = len(listOfLists[0])
-        if any([len(row) != testLen for row in listOfLists]):
-            raise ValueError("Not a rectangle grid")
-
-        self.data = listOfLists
-
-        self.H = len(self.data)
-        self.W = testLen
-
-    def __iter__(self):
-        for row in self.data:
-            for elem in row:
-                yield elem
-
-    def __repr__(self):
-        elemLen = max((len(repr(elem)) for elem in self))
-
-        name = type(self).__name__
-        res = f"{name}(["
-
-        for y, row in enumerate(self.data):
-            if y != 0:  # Not First Row
-                res += " " * len(name + ")")
-            res += f"[{row[0]!r: >{elemLen}}"
-            for elem in row[1:]:
-                res += f", {elem!r: >{elemLen}}"
-            if y != self.H - 1:  # Not Last Row
-                res += "],\n "
-        res += "]])"
-
-        return res
-
-    def __str__(self):
-        elemLen = max((len(str(elem)) for elem in self))
-
-        res = "["
-        for y, row in enumerate(self.data):
-            res += f"[{row[0]: >{elemLen}}"
-            for elem in row[1:]:
-                res += f" {elem: >{elemLen}}"
-            if y != self.H - 1:  # Not Last Row
-                res += "]\n "
-        res += "]]"
-
-        return res
-
-    def __getitem__(self, orCoords):
-        x, y = orCoords
-        if x in range(self.W) and y in range(self.H):
-            return self.data[y][x]
-        else:
-            return None
-
-    def __setitem__(self, orCoords, letter):
-        x, y = orCoords
-        if x in range(self.W) and y in range(self.H):
-            self.data[y][x] = letter
-        else:
-            raise IndexError("Key out of range")
-
-    def copy(self):
-        data = [row[:] for row in self.data]
-        return Grid(data)
-
-    def iter(self, direction="row"):
-        if direction == "row":
-            order = [(n, m) for m in range(self.H) for n in range(self.W)]
-        elif direction == "col":
-            order = [(n, m) for n in range(self.W) for m in range(self.H)]
-
-        for i, j in order:
-            yield self[i, j]
-
-    def enum(self, direction="row"):
-        if direction == "row":
-            order = [(n, m) for m in range(self.H) for n in range(self.W)]
-        elif direction == "col":
-            order = [(n, m) for n in range(self.W) for m in range(self.H)]
-
-        for i, j in order:
-            yield (i, j, self[i, j])
-
-    def arroundVals(self, x, y):
-        vals = []
-        for i, j in [(i, j) for i in (-1, 0, 1) for j in (-1, 0, 1) if (i, j) != (0, 0)]:
-            vals.append(self[x + i, y + j])
-        return vals
+from Grid import Grid
 
 
 class OCoords:
@@ -114,21 +21,21 @@ class OCoords:
         return iter((self.x, self.y))
 
     def __add__(self, n):
-        orCoords = OCoords(self.x, self.y, self.direction)
+        orCoords = self.__class__(self.x, self.y, self.direction)
         if type(n) == int:
             for i in range(n):
                 orCoords.forward()
             return orCoords
 
     def __sub__(self, n):
-        orCoords = OCoords(self.x, self.y, self.direction)
+        orCoords = self.__class__(self.x, self.y, self.direction)
         if type(n) == int:
             for i in range(n):
                 orCoords.backward()
             return orCoords
 
     def __neg__(self):
-        orCoords = OCoords(self.x, self.y, self.direction)
+        orCoords = self.__class__(self.x, self.y, self.direction)
         orCoords.switchDir()
         return orCoords
 
@@ -212,7 +119,7 @@ class ScrabbleGrid(Grid):
         super().__init__(data)
         self.lang = lang
         # Dictionnary
-        with open(f"Words/WORDS {self.lang}.txt", "r") as file:
+        with open(f"Words/SCRDICT {self.lang}.txt", "r") as file:
             self.WORDS = file.read().split("\n")
 
         # Points on each letter
