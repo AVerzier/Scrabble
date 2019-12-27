@@ -13,6 +13,7 @@ class ScrabbleFinder(ScrabbleGrid):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.gridTmp = np.zeros_like(self.grid, dtype=object)
 
     @staticmethod
     def jokComb(wordToCount, liJok):
@@ -289,7 +290,7 @@ class ScrabbleFinder(ScrabbleGrid):
                         success = False
                         break
 
-                if success == True:
+                if success:
 
                     if set(liJok) in (set(), {"?"}):  # No joker was used:
                         pts = self.countPtWord(wordToCount, orCoords)
@@ -706,6 +707,7 @@ class ScrabbleHelper(ScrabbleFinder):
         self.boardCan.focus_set()
         self.buttonsOff()
         self.showCursor()
+
 
 if __name__ == '__main__':
     win = ScrabbleHelper()

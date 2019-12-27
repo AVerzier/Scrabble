@@ -1,207 +1,150 @@
-from Grid import Grid
+
+import numpy as np
+import pandas as pd
+import json
+import re
 
 
-class OCoords:
-    """Oriented Coordinates for ScrabbleGrid"""
+class ScrabbleGrid:
 
-    def __init__(self, x=0, y=0, direction="row"):
-        self.x = x
-        self.y = y
-        self.direction = direction
+    def __init__(self, data=None, lang="FR"):
 
-    def __repr__(self):
-        name = type(self).__name__
-        args = (self.x, self.y, self.direction)
-        return f"{name}{args}"
-
-    def __str__(self):
-        return f"(x : {self.x}, y : {self.y})"
-
-    def __iter__(self):
-        return iter((self.x, self.y))
-
-    def __add__(self, n):
-        orCoords = self.__class__(self.x, self.y, self.direction)
-        if type(n) == int:
-            for i in range(n):
-                orCoords.forward()
-            return orCoords
-
-    def __sub__(self, n):
-        orCoords = self.__class__(self.x, self.y, self.direction)
-        if type(n) == int:
-            for i in range(n):
-                orCoords.backward()
-            return orCoords
-
-    def __neg__(self):
-        orCoords = self.__class__(self.x, self.y, self.direction)
-        orCoords.switchDir()
-        return orCoords
-
-    def unpack(self):
-        return self.x, self.y, self.direction
-
-    def switchDir(self):
-        if self.direction == "row":
-            self.direction = "col"
+        if data == None:
+            self.grid = np.zeros((15, 15), dtype=object)
+            self.grid.fill(" ")
         else:
-            self.direction = "row"
-
-    def chDir(self, direction):
-        if direction not in ("row", "col"):
-            raise ValueError("Direction should be 'row' or 'col'")
-        else:
-            self.direction = direction
-
-    def next(self, grid):
-        self.forward()
-        w, h = grid.W, grid.H
-
-        if self.x >= w:
-            self.x = 0
-            self.y += 1
-            if self.y >= h:
-                self.y = 0
-
-        elif self.y >= h:
-            self.y = 0
-            self.x += 1
-            if self.x >= w:
-                self.x = 0
-
-    def move(self, way, direction=None, wrapGrid=None, boundGrid=None):
-        if direction != None:
-            self.chDir(direction)
-
-        if way == "forward":
-            leap = 1
-        elif way == "backward":
-            leap = -1
-        else:
-            raise ValueError("way should be 'forward' or 'backward'")
-
-        if self.direction == "row":
-            self.x += leap
-            if boundGrid:
-                self.x = min(max(self.x, 0), boundGrid.W - 1)
-            elif wrapGrid:
-                self.x %= wrapGrid.W
-        elif self.direction == "col":
-            self.y += leap
-            if boundGrid:
-                self.y = min(max(self.y, 0), boundGrid.H - 1)
-            elif wrapGrid:
-                self.y %= wrapGrid.H
-
-    def forward(self, *args, **kwargs):
-        self.move("forward", *args, **kwargs)
-
-    def backward(self, *args, **kwargs):
-        self.move("backward", *args, **kwargs)
-
-    def nextFreeTile(self, playerGrid, *args, **kwargs):
-        if self.direction == "row":
-            size = playerGrid.W
-        else:
-            size = playerGrid.H
-        for i in range(size):
-            self.move(*args, **kwargs)
-            if playerGrid[self] != "_":
-                break
-
-        return i  # Nb of "_" jumped
-
-
-class ScrabbleGrid(Grid):
-
-    def __init__(self, data=[[0 for x in range(15)] for y in range(15)], lang="FR"):
-        super().__init__(data)
+            self.grid = np.array(data, dtype=object)
         self.lang = lang
         # Dictionnary
-        with open(f"Words/SCRDICT {self.lang}.txt", "r") as file:
-            self.WORDS = file.read().split("\n")
-
+        with open(f"Words/SCRDICT {self.lang}.json", "r") as file:
+            self.WORDS = json.load(file)
         # Points on each letter
-        with open(f"Letters/letPt {self.lang}.txt", "r") as file:
-            self.letPt = eval(file.read())
-        self.gridPt = Grid([[4, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 4],
-                            [0, 3, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 3, 0],
-                            [0, 0, 3, 0, 0, 0, 1, 0, 1, 0, 0, 0, 3, 0, 0],
-                            [1, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 1],
-                            [0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0],
-                            [0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0],
-                            [0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
-                            [4, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 4],
-                            [0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0],
-                            [0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 2, 0],
-                            [0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0],
-                            [1, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 1],
-                            [0, 0, 3, 0, 0, 0, 1, 0, 1, 0, 0, 0, 3, 0, 0],
-                            [0, 3, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 3, 0],
-                            [4, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 4]])
+        with open(f"Letters/letters {self.lang}.csv", "r") as file:
+            self.letters = pd.read_csv(file, index_col=0)
 
-    def tileSurrounded(self, orCoords):
-        """Check if one of the tile beside is occupied"""
+        self.wordMult = np.loadtxt("wordMult.txt", dtype="uint8")
 
-        return bool(self[-orCoords - 1] or self[-orCoords + 1])
+        self.letMult = np.loadtxt("letMult.txt", dtype="uint8")
 
-    def wordAcross(self, letter, orCoords):
-        """Return the word made accross"""
+        self.gridPts = np.zeros_like(self.grid, dtype="uint8")
 
-        swCoords = -orCoords
+    def __str__(self):
+        return str(self.grid)
 
-        prevLetters = self.prevLetters(swCoords - 1)
-        postLetters = self.postLetters(swCoords + 1)
-        wordAcross = prevLetters + [letter] + postLetters
-        return "".join(wordAcross)
+    @staticmethod
+    def arr2str(arr):
+        return "".join(map(str, arr))
 
-    def prevLetters(self, orCoords):
-        """Return the the letters going backward"""
+    @staticmethod
+    def replace(pattern, new, old):
+        """Replace with indices"""
+        ret = old
+        span = 0
+        for m in re.finditer(pattern, ret):
+            ind = m.start()
+            match = m.group()
+            ret = ret.replace(match, new[ind-span])
+            span += len(match)-1
+        return ret
 
-        prevLetters = []
-        while self[orCoords] not in (0, None):
-            prevLetters.append(self[orCoords])
-            orCoords -= 1
-        return prevLetters[::-1]  # Reverse
-
-    def postLetters(self, orCoords):
-        """Return the the letters going forward"""
-
-        postLetters = []
-        while self[orCoords] not in (0, None):
-            postLetters.append(self[orCoords])
-            orCoords += 1
-        return postLetters
-
-    def placeWord(self, word, x, y, direction):
+    def placeWord(self, word, i, j, direction):
         """Put the Letters on the grid"""
 
-        orCoords = OCoords(x, y, direction)
-        for letter in word:
-            if self[orCoords] == 0:
-                self[orCoords] = letter
-            orCoords += 1
+        length = len(word)
 
-    def countPtAcross(self, letter, orCoords):
+        if direction == "row":
+            coords = (i, slice(j, j+length))
+        else:
+            coords = (slice(i, i+length), j)
+
+        self.grid[coords] = list(word)
+        self.gridPts[coords] = [self.letters.loc[let]["Points"] for let in word]
+
+    def neighbours(self, i, j, direction):
+        """Return the indices of the neighbourhood"""
+
+        if direction == "row":
+            nonz = np.flatnonzero(self.grid[:, j] == " ")
+            ind = np.searchsorted(nonz, i)
+            return (slice(nonz[ind], nonz[ind+1]), j)
+        else:
+            nonz = np.flatnonzero(self.grid[i, :] == " ")
+            ind = np.searchsorted(nonz, j)
+            return (i, slice(nonz[ind], nonz[ind+1]))
+
+        if direction == "row":
+            prev = self.grid[i, :j]
+            post = self.grid[i, j+1:]
+        else:
+            prev = self.grid[:i, j]
+            post = self.grid[i+1:, j]
+
+        return np.any(self.grid[coords] != " ")
+
+    def wordAcross(self, letter, i, j, direction):
+        """Return the word made accross"""
+
+        if direction == "row":
+            direction = "col"
+        else:
+            direction = "row"
+
+        prevLetters = self.prevLetters(i, j, direction)
+        postLetters = self.postLetters(i, j, direction)
+        wordAcross = prevLetters + letter + postLetters
+        return wordAcross
+
+    def prevLetters(self, i, j, direction):
+        """Return the the letters going backward"""
+
+        if direction == "row":
+            coords = (i, slice(j))
+        else:
+            coords = (slice(i), j)
+
+        prevLetters = self.grid[coords][::-1]
+        prevLetters = self.arr2str(prevLetters)
+        prevLetters = prevLetters.split(" ")[0]
+
+        return prevLetters[::-1]
+
+    def postLetters(self, i, j, direction):
+        """Return the the letters going forward"""
+
+        if direction == "row":
+            coords = (i, slice(j+1, None))
+        else:
+            coords = (slice(i+1, None), j)
+
+        postLetters = self.arr2str(self.grid[coords])
+        postLetters = postLetters.split(" ")[0]
+
+        return postLetters
+
+    def countPtAcross(self, letter, i, j, direction):
         """Count the points made by the word beside"""
+
+        if direction == "row":
+            coords = (i, slice(j))
+        else:
+            coords = (slice(i), j)
 
         pts = 0
         mult = 1
 
-        wordAcross = self.wordAcross(letter, orCoords)
+        wordAcross = self.wordAcross(letter, i, j, direction)
         for let in wordAcross:
             if let.isupper():
-                pts += self.letPt[let]
+                pts += self.letters.loc[let]["Points"]
 
         # letter on bonus tile:
-        bonusCase = self.gridPt[orCoords]
+        bonusCase = self.gridBonus[i, j]
         if bonusCase == 1:
             if letter.isupper():
-                pts += self.letPt[letter]
+                pts += self.letters.loc[letter]["Points"]
         elif bonusCase == 2:
             if letter.isupper():
-                pts += self.letPt[letter] * 2
+                pts += self.letters.loc[letter]["Points"] * 2
         elif bonusCase == 3:
             mult *= 2
         elif bonusCase == 4:
@@ -209,38 +152,43 @@ class ScrabbleGrid(Grid):
 
         return pts * mult
 
-    def countPtWord(self, wordToCount, orCoords):
+    def countPtWord(self, wordToCount, i, j, direction):
         """Count the points of the word made"""
+
+        length = len(wordToCount)
+
+        if direction == "row":
+            coords = (i, slice(j, j+length))
+        else:
+            coords = (slice(i, i+length), j)
 
         totPts = 0
         wordPts = 0
         mult = 1
         nbLetUsed = 0
 
-        for letter in wordToCount:
+        for letter, case, bonus in zip(wordToCount, self.grid[coords], self.gridBonus[coords]):
             if letter.isupper():
-                wordPts += self.letPt[letter]
+                wordPts += self.letters.loc[letter]["Points"]
 
-            if self[orCoords] != 0:  # If the tile was occupied:
-                orCoords += 1
+            if case != " ":  # If the tile was occupied:
                 continue
 
             nbLetUsed += 1
 
-            bonusCase = self.gridPt[orCoords]
-            if bonusCase == 1:
+            if bonus == 1:
                 if letter.isupper():
-                    wordPts += self.letPt[letter]
-            elif bonusCase == 2:
+                    wordPts += self.letters.loc[letter]["Points"]
+            elif bonus == 2:
                 if letter.isupper():
-                    wordPts += self.letPt[letter] * 2
-            elif bonusCase == 3:
+                    wordPts += self.letters.loc[letter]["Points"] * 2
+            elif bonus == 3:
                 mult *= 2
-            elif bonusCase == 4:
+            elif bonus == 4:
                 mult *= 3
 
-            if self.tileSurrounded(orCoords):
-                totPts += self.countPtAcross(letter, orCoords)
+            if self.neighbours(i, j, direction):
+                totPts += self.countPtAcross(letter, i, j, direction)
 
             orCoords += 1
 
@@ -251,78 +199,57 @@ class ScrabbleGrid(Grid):
 
         return totPts
 
-    def isConnected(self, newLetters, orCoords):
+    def isConnected(self, newLetters, i, j, direction):
 
-        if self[orCoords - 1]:  # Letter before
+        if self.grid[orCoords - 1]:  # Letter before
             return True
 
         for letter in newLetters:
-            if self.tileSurrounded(orCoords):
+            if self.neighbours(i, j, direction):
                 return True
             orCoords += 1
 
-        if self[orCoords]:  # Letter after
+        if self.grid[orCoords]:  # Letter after
             return True
 
         return False
 
-    def validate(self, newLetters, x, y, direction):
+    def isValid(self, word, i, j, direction):
         """Check if Letters added make legit play"""
-
-        orCoords = OCoords(x, y, direction)
-
-        if not self.isConnected(newLetters, orCoords + 0):  # "+ 0" to copy
-            print("New Letters are not connected to the current Letters")
-            # raise IndexError("New Letters are not connected to the current Letters")
+        length = len(word)
+        if not re.search(f"^{word.upper()}$", self.WORDS[str(length)], re.M):
+            print(f"{word} not in the dictionnary")
             return False
 
-        prevLetters = self.prevLetters(orCoords - 1)
-
-        midLetters = []
-        for letter in newLetters:
-            if self[orCoords] == None:
-                raise IndexError(f"{orCoords} : {letter} not on the grid")
-                return False
-
-            elif self[orCoords] != 0:
-                if letter != "_" and letter.upper() != self[orCoords].upper():
-                    print(f"{letter} and {self[orCoords]} doesn't correspond")
-                    # raise ValueError(f"{letter} and {self[orCoords]} doesn't correspond")
+        if np.all(self.grid == r"[\w]"):  # Empty grid, first play
+            if direction == "row":
+                if not (i == 7 and 7 in range(j, j+length)):
                     return False
-
-                midLetters.append(self[orCoords])
-                orCoords += 1
-                continue
-
-            if self.tileSurrounded(orCoords):
-                wordAcross = self.wordAcross(letter, orCoords)
-                if wordAcross.upper() not in self.WORDS:
-                    print(f"{orCoords} : {wordAcross.upper()} not in the dictionnary")
-                    # raise ValueError(f"{orCoords} : {wordAcross.upper()} not in the dictionnary")
+            else:
+                if not (7 in range(i, i+length) and j == 7):
                     return False
+            return True
 
-            midLetters.append(letter)
-            orCoords += 1
+        if direction == "row":
+            coords = (i, slice(j, j+length))
+        else:
+            coords = (slice(i, i+length), j)
 
-        postLetters = self.postLetters(orCoords)
+        letters = self.arr2str(self.grid[coords])
 
-        wordToCount = prevLetters + midLetters + postLetters
-        wordToCount = "".join(wordToCount)
-
-        print(wordToCount)
-
-        if wordToCount.upper() not in self.WORDS:
-            print(f"{wordToCount.upper()} not in the dictionnary")
-            # raise ValueError(f"{wordToCount.upper()} not in the dictionnary")
+        if not re.fullmatch(letters, word):
+            print("Do not match with the grid")
+            return False
 
         return True
 
+        wordToCount = self.replace(r"\[[^\]]*\]", word, letters)
+
+        return wordToCount
+
 
 if __name__ == '__main__':
-    g = Grid([[i * j for j in range(5)]for i in range(3)])
-    print(g)
-    a = g.copy()
-    a[1, 1] = -5
-    print(g)
-    print(a.data)
-    print(g.data)
+    scrg = ScrabbleGrid()
+    scrg.placeWord("ARBRE", 7, 6, "row")
+    scrg.placeWord("MIMES", 4, 10, "col")
+    print(scrg)
