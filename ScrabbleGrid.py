@@ -7,13 +7,11 @@ import re
 
 class ScrabbleGrid:
 
-    def __init__(self, data=None, lang="FR"):
+    def __init__(self, lang="FR"):
 
-        if data == None:
-            self.grid = np.zeros((15, 15), dtype=object)
-            self.grid.fill(" ")
-        else:
-            self.grid = np.array(data, dtype=object)
+        self.grid = np.zeros((15, 15), dtype=object)
+        self.grid.fill(" ")
+
         self.lang = lang
         # Dictionnary
         with open(f"Words/SCRDICT {self.lang}.json", "r") as file:
@@ -47,12 +45,12 @@ class ScrabbleGrid:
             span += len(match)-1
         return ret
 
-    def placeWord(self, word, i, j, direction):
+    def placeWord(self, word, i, j, axis):
         """Put the Letters on the grid"""
 
         length = len(word)
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j, j+length))
         else:
             coords = (slice(i, i+length), j)
@@ -60,44 +58,39 @@ class ScrabbleGrid:
         self.grid[coords] = list(word)
         self.gridPts[coords] = [self.letters.loc[let]["Points"] for let in word]
 
-    def neighbours(self, i, j, direction):
-        """Return the indices of the neighbourhood"""
+    def neighbours(self, i, j, axis):
+        """Return the indices of the across neighbourhood"""
 
-        if direction == "row":
-            nonz = np.flatnonzero(self.grid[:, j] == " ")
-            ind = np.searchsorted(nonz, i)
-            return (slice(nonz[ind], nonz[ind+1]), j)
+        if axis == "row":
+            prev = np.concatenate([" "], self.grid[:i, j])
+            post = np.concatenate(self.grid[i+1:, j], [" "])
+            inf = np.flatnonzero(prev == " ")[-1]+1
+            sub = np.flatnonzero(prev == " ")[0]
+            return np.index_exp[inf:sub, j]
         else:
-            nonz = np.flatnonzero(self.grid[i, :] == " ")
-            ind = np.searchsorted(nonz, j)
-            return (i, slice(nonz[ind], nonz[ind+1]))
+            prev = np.concatenate([" "], self.grid[i, :j])
+            post = np.concatenate(self.grid[i, j+1:], [" "])
+            inf = np.flatnonzero(prev == " ")[-1]+1
+            sub = np.flatnonzero(prev == " ")[0]
+            return np.index_exp[i, inf:sub]
 
-        if direction == "row":
-            prev = self.grid[i, :j]
-            post = self.grid[i, j+1:]
-        else:
-            prev = self.grid[:i, j]
-            post = self.grid[i+1:, j]
-
-        return np.any(self.grid[coords] != " ")
-
-    def wordAcross(self, letter, i, j, direction):
+    def wordAcross(self, letter, i, j, axis):
         """Return the word made accross"""
 
-        if direction == "row":
-            direction = "col"
+        if axis == "row":
+            axis = "col"
         else:
-            direction = "row"
+            axis = "row"
 
-        prevLetters = self.prevLetters(i, j, direction)
-        postLetters = self.postLetters(i, j, direction)
+        prevLetters = self.prevLetters(i, j, axis)
+        postLetters = self.postLetters(i, j, axis)
         wordAcross = prevLetters + letter + postLetters
         return wordAcross
 
-    def prevLetters(self, i, j, direction):
+    def prevLetters(self, i, j, axis):
         """Return the the letters going backward"""
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j))
         else:
             coords = (slice(i), j)
@@ -108,10 +101,10 @@ class ScrabbleGrid:
 
         return prevLetters[::-1]
 
-    def postLetters(self, i, j, direction):
+    def postLetters(self, i, j, axis):
         """Return the the letters going forward"""
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j+1, None))
         else:
             coords = (slice(i+1, None), j)
@@ -121,10 +114,10 @@ class ScrabbleGrid:
 
         return postLetters
 
-    def countPtAcross(self, letter, i, j, direction):
+    def countPtAcross(self, letter, i, j, axis):
         """Count the points made by the word beside"""
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j))
         else:
             coords = (slice(i), j)
@@ -132,7 +125,7 @@ class ScrabbleGrid:
         pts = 0
         mult = 1
 
-        wordAcross = self.wordAcross(letter, i, j, direction)
+        wordAcross = self.wordAcross(letter, i, j, axis)
         for let in wordAcross:
             if let.isupper():
                 pts += self.letters.loc[let]["Points"]
@@ -152,12 +145,12 @@ class ScrabbleGrid:
 
         return pts * mult
 
-    def countPtWord(self, wordToCount, i, j, direction):
+    def countPtWord(self, wordToCount, i, j, axis):
         """Count the points of the word made"""
 
         length = len(wordToCount)
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j, j+length))
         else:
             coords = (slice(i, i+length), j)
@@ -187,8 +180,8 @@ class ScrabbleGrid:
             elif bonus == 4:
                 mult *= 3
 
-            if self.neighbours(i, j, direction):
-                totPts += self.countPtAcross(letter, i, j, direction)
+            if self.neighbours(i, j, axis):
+                totPts += self.countPtAcross(letter, i, j, axis)
 
             orCoords += 1
 
@@ -199,13 +192,13 @@ class ScrabbleGrid:
 
         return totPts
 
-    def isConnected(self, newLetters, i, j, direction):
+    def isConnected(self, newLetters, i, j, axis):
 
         if self.grid[orCoords - 1]:  # Letter before
             return True
 
         for letter in newLetters:
-            if self.neighbours(i, j, direction):
+            if self.neighbours(i, j, axis):
                 return True
             orCoords += 1
 
@@ -214,7 +207,7 @@ class ScrabbleGrid:
 
         return False
 
-    def isValid(self, word, i, j, direction):
+    def isValid(self, word, i, j, axis):
         """Check if Letters added make legit play"""
         length = len(word)
         if not re.search(f"^{word.upper()}$", self.WORDS[str(length)], re.M):
@@ -222,7 +215,7 @@ class ScrabbleGrid:
             return False
 
         if np.all(self.grid == r"[\w]"):  # Empty grid, first play
-            if direction == "row":
+            if axis == "row":
                 if not (i == 7 and 7 in range(j, j+length)):
                     return False
             else:
@@ -230,7 +223,7 @@ class ScrabbleGrid:
                     return False
             return True
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j, j+length))
         else:
             coords = (slice(i, i+length), j)
