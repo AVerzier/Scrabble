@@ -9,11 +9,10 @@ class ScrabbleGrid:
 
     def __init__(self, data=None, lang="FR"):
 
-        if data == None:
-            self.grid = np.zeros((15, 15), dtype=object)
-            self.grid.fill(" ")
-        else:
-            self.grid = np.array(data, dtype=object)
+        self.grid = {"row": np.zeros((15, 15), dtype=object)}
+        self.grid["row"].fill(" ")
+        self.grid["col"] = self.grid["row"].view().T
+
         self.lang = lang
         # Dictionnary
         with open(f"Words/SCRDICT {self.lang}.json", "r") as file:
@@ -22,14 +21,24 @@ class ScrabbleGrid:
         with open(f"Letters/letters {self.lang}.csv", "r") as file:
             self.letters = pd.read_csv(file, index_col=0)
 
-        self.wordMult = np.loadtxt("wordMult.txt", dtype="uint8")
+        self.wordMult = {"row": np.loadtxt("wordMult.txt", dtype="uint8")}
+        self.wordMult["col"] = self.wordMult["row"].view().T
 
-        self.letMult = np.loadtxt("letMult.txt", dtype="uint8")
+        self.letMult = {"row": np.loadtxt("letMult.txt", dtype="uint8")}
+        self.letMult["col"] = self.letMult["row"].view().T
 
-        self.gridPts = np.zeros_like(self.grid, dtype="uint8")
+        self.gridPts = {"row": np.zeros_like(self.grid["row"], dtype="uint8")}
+        self.gridPts["col"] = self.gridPts["row"].view().T
 
     def __str__(self):
-        return str(self.grid)
+        return str(self.grid["row"])
+
+    def swichij(f):
+        def wrapper(self, i, j, axis, *args, **kwargs):
+            if axis == "col":
+                i, j = j, i
+            return f(self, i, j, axis, *args, **kwargs)
+        return wrapper
 
     @staticmethod
     def arr2str(arr):
@@ -47,174 +56,138 @@ class ScrabbleGrid:
             span += len(match)-1
         return ret
 
-    def placeWord(self, word, i, j, direction):
+    @swichij
+    def placeWord(self, i, j, axis, word):
         """Put the Letters on the grid"""
 
         length = len(word)
 
-        if direction == "row":
-            coords = (i, slice(j, j+length))
-        else:
-            coords = (slice(i, i+length), j)
+        coords = np.index_exp[i, j:j+length]
 
-        self.grid[coords] = list(word)
-        self.gridPts[coords] = [self.letters.loc[let]["Points"] for let in word]
+        self.grid[axis][coords] = list(word)
+        self.gridPts[axis][coords] = [self.letters.loc[let]["Points"] for let in word]
 
-    def neighbours(self, i, j, direction):
+    @swichij
+    def neighbours(self, i, j, axis):
         """Return the indices of the neighbourhood"""
 
-        if direction == "row":
-            nonz = np.flatnonzero(self.grid[:, j] == " ")
-            ind = np.searchsorted(nonz, i)
-            return (slice(nonz[ind], nonz[ind+1]), j)
+        free = np.flatnonzero(np.concatenate(
+            ([" "], self.grid[axis][:i, j], [0], self.grid[axis][i+1:, j], [" "])) == " ")-1
+        ind = np.searchsorted(free, i)
+
+        return np.index_exp[free[ind-1]+1: free[ind], j]
+
+        if axis == "row":
+            free = np.flatnonzero(np.concatenate(
+                ([" "], self.grid[:i, j], [0], self.grid[i+1:, j], [" "])) == " ")-1
+            ind = np.searchsorted(free, i)
+            return (slice(free[ind-1]+1, free[ind]), j)
         else:
-            nonz = np.flatnonzero(self.grid[i, :] == " ")
-            ind = np.searchsorted(nonz, j)
-            return (i, slice(nonz[ind], nonz[ind+1]))
+            free = np.flatnonzero(np.concatenate(
+                ([" "], self.grid[i, :j], [0], self.grid[i, j+1:], [" "])) == " ")-1
+            ind = np.searchsorted(free, j)
+            return (i, slice(free[ind-1]+1, free[ind]))
 
-        if direction == "row":
-            prev = self.grid[i, :j]
-            post = self.grid[i, j+1:]
-        else:
-            prev = self.grid[:i, j]
-            post = self.grid[i+1:, j]
+        # if axis == "row":
+        #     prev = self.grid[i, :j]
+        #     post = self.grid[i, j+1:]
+        # else:
+        #     prev = self.grid[:i, j]
+        #     post = self.grid[i+1:, j]
 
-        return np.any(self.grid[coords] != " ")
+        # return np.any(self.grid[coords] != " ")
 
-    def wordAcross(self, letter, i, j, direction):
+    @swichij
+    def wordAcross(self, i, j, axis, letter):
         """Return the word made accross"""
 
-        if direction == "row":
-            direction = "col"
-        else:
-            direction = "row"
+        coords = self.neighbours(i, j, axis)
 
-        prevLetters = self.prevLetters(i, j, direction)
-        postLetters = self.postLetters(i, j, direction)
-        wordAcross = prevLetters + letter + postLetters
+        wordAcross = self.arr2str(self.grid[axis][coords]).replace(" ", letter, 1)
+
         return wordAcross
 
-    def prevLetters(self, i, j, direction):
+        # if axis == "row":
+        #     axis = "col"
+        # else:
+        #     axis = "row"
+
+        # prevLetters = self.prevLetters(i, j, axis)
+        # postLetters = self.postLetters(i, j, axis)
+        # wordAcross = prevLetters + letter + postLetters
+        # return wordAcross
+
+    @swichij
+    def prevLetters(self, i, j, axis):
         """Return the the letters going backward"""
 
-        if direction == "row":
-            coords = (i, slice(j))
-        else:
-            coords = (slice(i), j)
+        if axis == "col":
+            i, j = j, i
 
-        prevLetters = self.grid[coords][::-1]
+        coords = np.index_exp[i, :j]
+
+        prevLetters = self.grid[axis][coords][::-1]
         prevLetters = self.arr2str(prevLetters)
         prevLetters = prevLetters.split(" ")[0]
 
         return prevLetters[::-1]
 
-    def postLetters(self, i, j, direction):
+    @swichij
+    def postLetters(self, i, j, axis):
         """Return the the letters going forward"""
 
-        if direction == "row":
-            coords = (i, slice(j+1, None))
-        else:
-            coords = (slice(i+1, None), j)
+        if axis == "col":
+            i, j = j, i
 
-        postLetters = self.arr2str(self.grid[coords])
+        coords = np.index_exp[i, j+1:]
+
+        postLetters = self.arr2str(self.grid[axis][coords])
         postLetters = postLetters.split(" ")[0]
 
         return postLetters
 
-    def countPtAcross(self, letter, i, j, direction):
+    def countPtAcross(self, i, j, axis, letter):
         """Count the points made by the word beside"""
 
-        if direction == "row":
-            coords = (i, slice(j))
-        else:
-            coords = (slice(i), j)
+        print(self.neighbours(i, j, axis))
 
-        pts = 0
-        mult = 1
+        pts = self.gridPts[axis][self.neighbours(i, j, axis)]
 
-        wordAcross = self.wordAcross(letter, i, j, direction)
-        for let in wordAcross:
-            if let.isupper():
-                pts += self.letters.loc[let]["Points"]
+        if len(pts) <= 1:  # No neigbour
+            return 0
 
-        # letter on bonus tile:
-        bonusCase = self.gridBonus[i, j]
-        if bonusCase == 1:
-            if letter.isupper():
-                pts += self.letters.loc[letter]["Points"]
-        elif bonusCase == 2:
-            if letter.isupper():
-                pts += self.letters.loc[letter]["Points"] * 2
-        elif bonusCase == 3:
-            mult *= 2
-        elif bonusCase == 4:
-            mult *= 3
+        letPts = self.letters.loc[letter]["Points"] * self.letMult[axis][i, j]
 
-        return pts * mult
+        return (np.sum(pts)+letPts)*self.wordMult[axis][i, j]
 
-    def countPtWord(self, wordToCount, i, j, direction):
+    @swichij
+    def countPtWord(self, i, j, axis, word):
         """Count the points of the word made"""
 
-        length = len(wordToCount)
+        length = len(word)
 
-        if direction == "row":
-            coords = (i, slice(j, j+length))
-        else:
-            coords = (slice(i, i+length), j)
+        word = re.sub(r"[a-z]", "?", word)
 
-        totPts = 0
-        wordPts = 0
-        mult = 1
-        nbLetUsed = 0
+        coords = np.index_exp[i, j:j+length]
 
-        for letter, case, bonus in zip(wordToCount, self.grid[coords], self.gridBonus[coords]):
-            if letter.isupper():
-                wordPts += self.letters.loc[letter]["Points"]
+        letMult = np.where(self.grid[axis] != " ", self.letMult[axis], 1)[coords]
+        wordMult = np.prod(np.where(self.grid[axis] != " ", self.wordMult[axis], 1)[coords])
+        letPts = np.array([self.letters.loc[let]["Points"] for let in word])
 
-            if case != " ":  # If the tile was occupied:
-                continue
+        pts = np.sum(letPts * letMult) * wordMult
 
-            nbLetUsed += 1
+        J, I = np.indices(self.grid[axis].shape)
 
-            if bonus == 1:
-                if letter.isupper():
-                    wordPts += self.letters.loc[letter]["Points"]
-            elif bonus == 2:
-                if letter.isupper():
-                    wordPts += self.letters.loc[letter]["Points"] * 2
-            elif bonus == 3:
-                mult *= 2
-            elif bonus == 4:
-                mult *= 3
+        arr = np.zeros((4, length), dtype=object)
 
-            if self.neighbours(i, j, direction):
-                totPts += self.countPtAcross(letter, i, j, direction)
+        np.stack((I[coords], J[coords], [axis]*length, list(word)), axis=1, out=arr)
 
-            orCoords += 1
+        print(arr)
+        arr = np.apply_along_axis(lambda a: self.countPtAcross(*a), 1, arr)
+        print(arr)
 
-        totPts += wordPts * mult
-
-        if nbLetUsed == 7:
-            totPts += 50
-
-        return totPts
-
-    def isConnected(self, newLetters, i, j, direction):
-
-        if self.grid[orCoords - 1]:  # Letter before
-            return True
-
-        for letter in newLetters:
-            if self.neighbours(i, j, direction):
-                return True
-            orCoords += 1
-
-        if self.grid[orCoords]:  # Letter after
-            return True
-
-        return False
-
-    def isValid(self, word, i, j, direction):
+    @swichij
+    def isValid(self, i, j, axis, word):
         """Check if Letters added make legit play"""
         length = len(word)
         if not re.search(f"^{word.upper()}$", self.WORDS[str(length)], re.M):
@@ -222,7 +195,7 @@ class ScrabbleGrid:
             return False
 
         if np.all(self.grid == r"[\w]"):  # Empty grid, first play
-            if direction == "row":
+            if axis == "row":
                 if not (i == 7 and 7 in range(j, j+length)):
                     return False
             else:
@@ -230,12 +203,14 @@ class ScrabbleGrid:
                     return False
             return True
 
-        if direction == "row":
+        if axis == "row":
             coords = (i, slice(j, j+length))
         else:
             coords = (slice(i, i+length), j)
 
         letters = self.arr2str(self.grid[coords])
+
+        # Test word across
 
         if not re.fullmatch(letters, word):
             print("Do not match with the grid")
@@ -250,6 +225,7 @@ class ScrabbleGrid:
 
 if __name__ == '__main__':
     scrg = ScrabbleGrid()
-    scrg.placeWord("ARBRE", 7, 6, "row")
-    scrg.placeWord("MIMES", 4, 10, "col")
+    scrg.placeWord(7, 6, "row", "ARBRE")
+    scrg.placeWord(7, 0, "row", "MIMES")
     print(scrg)
+    print(scrg.countPtWord(7, 5, "row", "ETRE"))
